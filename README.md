@@ -55,15 +55,14 @@ CLOUDFLARE_API_TOKEN = "your-api-token"     # Replace with your API token with D
 
 ### Getting Your Values
 
--   **Account ID**: Found in Cloudflare dashboard sidebar
--   **Database ID**: From `wrangler d1 create` command output
--   **API Token**: Create at [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) with D1:Edit permissions
+- **Account ID**: Found in Cloudflare dashboard sidebar
+- **Database ID**: From `wrangler d1 create` command output or in dashboard
+- **API Token**: Create at [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) with D1:Edit permissions
 
 ## Available Scripts
 
--   `pnpm run dev` - Start development server with benchmark UI
--   `pnpm run deploy` - Deploy to Cloudflare Workers
--   `pnpm run db:migrate:prod` - Apply database migrations
+- `pnpm run deploy` - Deploy to Cloudflare Workers
+- `pnpm run db:migrate:prod` - Apply database migrations
 
 ---
 

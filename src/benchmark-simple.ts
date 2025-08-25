@@ -12,6 +12,9 @@ interface BenchmarkConfig {
 
 interface BenchmarkResult {
     operation: string;
+    queryType: string;
+    description: string;
+    sqlQuery: string;
     approach: "binding" | "http";
     duration: number;
     recordsAffected?: number;
@@ -58,6 +61,9 @@ export class D1BenchmarkSimple {
 
     private async measureTime<T>(
         operation: string,
+        queryType: string,
+        description: string,
+        sqlQuery: string,
         approach: "binding" | "http",
         fn: () => Promise<T>
     ): Promise<BenchmarkResult> {
@@ -75,6 +81,9 @@ export class D1BenchmarkSimple {
 
             const benchmarkResult: BenchmarkResult = {
                 operation,
+                queryType,
+                description,
+                sqlQuery,
                 approach,
                 duration,
                 recordsAffected,
@@ -87,6 +96,9 @@ export class D1BenchmarkSimple {
             const duration = performance.now() - start;
             const benchmarkResult: BenchmarkResult = {
                 operation,
+                queryType,
+                description,
+                sqlQuery,
                 approach,
                 duration,
                 success: false,
@@ -175,123 +187,234 @@ export class D1BenchmarkSimple {
         console.log(`Seeding completed: ${userCount} users, ${sessionCount} sessions`);
     }
 
-    async runBasicQueries(): Promise<void> {
-        console.log("Running basic query benchmarks...");
+    async runQueryBenchmarks(iterations: number = 10): Promise<void> {
+        console.log(`Running query benchmarks with ${iterations} iterations per query type...`);
 
-        // Simple SELECT queries using raw SQL for compatibility
-        await this.measureTime("select_all_users_limit_10", "binding", () =>
-            this.dbBinding.run(sql`SELECT * FROM users LIMIT 10`)
-        );
+        // Query Type 1: Simple SELECT - Basic data retrieval
+        console.log("Testing Simple SELECT queries...");
+        const simpleSelectQuery = "SELECT id, name, email FROM users LIMIT 20";
+        for (let i = 0; i < iterations; i++) {
+            await this.measureTime(
+                `simple_select_${i}`,
+                "Simple SELECT",
+                "Basic data retrieval with LIMIT - fetches user records",
+                simpleSelectQuery,
+                "binding",
+                () => this.dbBinding.run(sql`SELECT id, name, email FROM users LIMIT 20`)
+            );
 
-        await this.measureTime("select_all_users_limit_10", "http", () =>
-            this.dbHttp.run(sqlHttp`SELECT * FROM users LIMIT 10`)
-        );
+            await this.measureTime(
+                `simple_select_${i}`,
+                "Simple SELECT",
+                "Basic data retrieval with LIMIT - fetches user records",
+                simpleSelectQuery,
+                "http",
+                () => this.dbHttp.run(sqlHttp`SELECT id, name, email FROM users LIMIT 20`)
+            );
+        }
 
-        // COUNT queries
-        await this.measureTime("count_users", "binding", () =>
-            this.dbBinding.run(sql`SELECT COUNT(*) as count FROM users`)
-        );
+        // Query Type 2: Filtered SELECT - WHERE clause performance
+        console.log("Testing Filtered SELECT queries...");
+        const filteredSelectQuery = "SELECT * FROM users WHERE email_verified = 1 AND is_anonymous = 0 LIMIT 30";
+        for (let i = 0; i < iterations; i++) {
+            await this.measureTime(
+                `filtered_select_${i}`,
+                "Filtered SELECT",
+                "WHERE clause filtering - finds verified users with conditions",
+                filteredSelectQuery,
+                "binding",
+                () =>
+                    this.dbBinding.run(sql`SELECT * FROM users WHERE email_verified = 1 AND is_anonymous = 0 LIMIT 30`)
+            );
 
-        await this.measureTime("count_users", "http", () =>
-            this.dbHttp.run(sqlHttp`SELECT COUNT(*) as count FROM users`)
-        );
+            await this.measureTime(
+                `filtered_select_${i}`,
+                "Filtered SELECT",
+                "WHERE clause filtering - finds verified users with conditions",
+                filteredSelectQuery,
+                "http",
+                () =>
+                    this.dbHttp.run(sqlHttp`SELECT * FROM users WHERE email_verified = 1 AND is_anonymous = 0 LIMIT 30`)
+            );
+        }
 
-        // WHERE queries
-        await this.measureTime("select_verified_users", "binding", () =>
-            this.dbBinding.run(sql`SELECT * FROM users WHERE email_verified = 1 LIMIT 50`)
-        );
+        // Query Type 3: JOIN Operations - Relational data access
+        console.log("Testing JOIN queries...");
+        const joinQuery = `SELECT u.name, u.email, s.created_at as last_session, s.city, s.country
+FROM users u 
+INNER JOIN sessions s ON u.id = s.user_id 
+WHERE s.created_at > ${Date.now() - 7 * 24 * 60 * 60 * 1000}
+ORDER BY s.created_at DESC
+LIMIT 25`;
+        for (let i = 0; i < iterations; i++) {
+            await this.measureTime(
+                `join_query_${i}`,
+                "JOIN Operations",
+                "INNER JOIN between users and sessions - relational data retrieval",
+                joinQuery,
+                "binding",
+                () =>
+                    this.dbBinding.run(sql`
+                    SELECT u.name, u.email, s.created_at as last_session, s.city, s.country
+                    FROM users u 
+                    INNER JOIN sessions s ON u.id = s.user_id 
+                    WHERE s.created_at > ${Date.now() - 7 * 24 * 60 * 60 * 1000}
+                    ORDER BY s.created_at DESC
+                    LIMIT 25
+                `)
+            );
 
-        await this.measureTime("select_verified_users", "http", () =>
-            this.dbHttp.run(sqlHttp`SELECT * FROM users WHERE email_verified = 1 LIMIT 50`)
-        );
+            await this.measureTime(
+                `join_query_${i}`,
+                "JOIN Operations",
+                "INNER JOIN between users and sessions - relational data retrieval",
+                joinQuery,
+                "http",
+                () =>
+                    this.dbHttp.run(sqlHttp`
+                    SELECT u.name, u.email, s.created_at as last_session, s.city, s.country
+                    FROM users u 
+                    INNER JOIN sessions s ON u.id = s.user_id 
+                    WHERE s.created_at > ${Date.now() - 7 * 24 * 60 * 60 * 1000}
+                    ORDER BY s.created_at DESC
+                    LIMIT 25
+                `)
+            );
+        }
 
-        // JOIN queries
-        await this.measureTime("join_users_sessions", "binding", () =>
-            this.dbBinding.run(sql`
-                SELECT u.id as user_id, u.name as user_name, s.id as session_id, s.created_at as session_created
-                FROM users u 
-                INNER JOIN sessions s ON u.id = s.user_id 
-                LIMIT 50
-            `)
-        );
+        // Query Type 4: Aggregation - COUNT, GROUP BY operations
+        console.log("Testing Aggregation queries...");
+        const aggregationQuery = `SELECT u.is_anonymous, COUNT(*) as user_count, 
+       COUNT(s.id) as session_count,
+       AVG(LENGTH(u.name)) as avg_name_length
+FROM users u
+LEFT JOIN sessions s ON u.id = s.user_id
+GROUP BY u.is_anonymous
+ORDER BY user_count DESC`;
+        for (let i = 0; i < iterations; i++) {
+            await this.measureTime(
+                `aggregation_${i}`,
+                "Aggregation",
+                "COUNT and GROUP BY operations - analytics-style queries",
+                aggregationQuery,
+                "binding",
+                () =>
+                    this.dbBinding.run(sql`
+                    SELECT u.is_anonymous, COUNT(*) as user_count, 
+                           COUNT(s.id) as session_count,
+                           AVG(LENGTH(u.name)) as avg_name_length
+                    FROM users u
+                    LEFT JOIN sessions s ON u.id = s.user_id
+                    GROUP BY u.is_anonymous
+                    ORDER BY user_count DESC
+                `)
+            );
 
-        await this.measureTime("join_users_sessions", "http", () =>
-            this.dbHttp.run(sqlHttp`
-                SELECT u.id as user_id, u.name as user_name, s.id as session_id, s.created_at as session_created
-                FROM users u 
-                INNER JOIN sessions s ON u.id = s.user_id 
-                LIMIT 50
-            `)
-        );
+            await this.measureTime(
+                `aggregation_${i}`,
+                "Aggregation",
+                "COUNT and GROUP BY operations - analytics-style queries",
+                aggregationQuery,
+                "http",
+                () =>
+                    this.dbHttp.run(sqlHttp`
+                    SELECT u.is_anonymous, COUNT(*) as user_count, 
+                           COUNT(s.id) as session_count,
+                           AVG(LENGTH(u.name)) as avg_name_length
+                    FROM users u
+                    LEFT JOIN sessions s ON u.id = s.user_id
+                    GROUP BY u.is_anonymous
+                    ORDER BY user_count DESC
+                `)
+            );
+        }
 
-        // ORDER BY queries
-        await this.measureTime("select_users_ordered", "binding", () =>
-            this.dbBinding.run(sql`SELECT * FROM users ORDER BY created_at DESC LIMIT 100`)
-        );
+        // Query Type 5: Bulk INSERT - Writing decent chunk of data
+        console.log("Testing Bulk INSERT queries...");
+        const bulkInsertQuery = `INSERT INTO users (id, name, email, email_verified, created_at, updated_at, is_anonymous) VALUES 
+(?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?), 
+(?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?)`;
+        for (let i = 0; i < iterations; i++) {
+            const timestamp = Date.now() + i;
 
-        await this.measureTime("select_users_ordered", "http", () =>
-            this.dbHttp.run(sqlHttp`SELECT * FROM users ORDER BY created_at DESC LIMIT 100`)
-        );
-    }
+            await this.measureTime(
+                `bulk_insert_${i}`,
+                "Bulk INSERT",
+                "Insert multiple records in single query - writing data efficiently",
+                bulkInsertQuery,
+                "binding",
+                () =>
+                    this.dbBinding.run(sql`
+                    INSERT INTO users (id, name, email, email_verified, created_at, updated_at, is_anonymous) VALUES 
+                    (${`bulk_${timestamp}_0`}, ${"Bulk User 0"}, ${`bulk_${timestamp}_0@test.com`}, ${0}, ${timestamp}, ${timestamp}, ${0}),
+                    (${`bulk_${timestamp}_1`}, ${"Bulk User 1"}, ${`bulk_${timestamp}_1@test.com`}, ${1}, ${timestamp}, ${timestamp}, ${0}),
+                    (${`bulk_${timestamp}_2`}, ${"Bulk User 2"}, ${`bulk_${timestamp}_2@test.com`}, ${0}, ${timestamp}, ${timestamp}, ${0}),
+                    (${`bulk_${timestamp}_3`}, ${"Bulk User 3"}, ${`bulk_${timestamp}_3@test.com`}, ${1}, ${timestamp}, ${timestamp}, ${0}),
+                    (${`bulk_${timestamp}_4`}, ${"Bulk User 4"}, ${`bulk_${timestamp}_4@test.com`}, ${0}, ${timestamp}, ${timestamp}, ${0})
+                `)
+            );
 
-    async runWriteOperations(): Promise<void> {
-        console.log("Running write operation benchmarks...");
+            await this.measureTime(
+                `bulk_insert_${i}`,
+                "Bulk INSERT",
+                "Insert multiple records in single query - writing data efficiently",
+                bulkInsertQuery,
+                "http",
+                () =>
+                    this.dbHttp.run(sqlHttp`
+                    INSERT INTO users (id, name, email, email_verified, created_at, updated_at, is_anonymous) VALUES 
+                    (${`bulk_http_${timestamp}_0`}, ${"Bulk User HTTP 0"}, ${`bulk_http_${timestamp}_0@test.com`}, ${0}, ${timestamp}, ${timestamp}, ${0}),
+                    (${`bulk_http_${timestamp}_1`}, ${"Bulk User HTTP 1"}, ${`bulk_http_${timestamp}_1@test.com`}, ${1}, ${timestamp}, ${timestamp}, ${0}),
+                    (${`bulk_http_${timestamp}_2`}, ${"Bulk User HTTP 2"}, ${`bulk_http_${timestamp}_2@test.com`}, ${0}, ${timestamp}, ${timestamp}, ${0}),
+                    (${`bulk_http_${timestamp}_3`}, ${"Bulk User HTTP 3"}, ${`bulk_http_${timestamp}_3@test.com`}, ${1}, ${timestamp}, ${timestamp}, ${0}),
+                    (${`bulk_http_${timestamp}_4`}, ${"Bulk User HTTP 4"}, ${`bulk_http_${timestamp}_4@test.com`}, ${0}, ${timestamp}, ${timestamp}, ${0})
+                `)
+            );
+        }
 
-        // Single INSERT
-        const timestamp = Date.now();
-        const userId1 = `bench_user_${timestamp}`;
-        const userId2 = `bench_user_http_${timestamp}`;
+        // Query Type 6: Bulk SELECT - Getting decent chunks of data out
+        console.log("Testing Bulk SELECT queries...");
+        const bulkSelectQuery = `SELECT u.id, u.name, u.email, u.email_verified, u.created_at, 
+       s.id as session_id, s.token, s.ip_address, s.user_agent, s.city, s.country
+FROM users u 
+LEFT JOIN sessions s ON u.id = s.user_id 
+ORDER BY u.created_at DESC 
+LIMIT 200`;
+        for (let i = 0; i < iterations; i++) {
+            await this.measureTime(
+                `bulk_select_${i}`,
+                "Bulk SELECT",
+                "Retrieve large dataset with JOIN - getting chunks of data efficiently",
+                bulkSelectQuery,
+                "binding",
+                () =>
+                    this.dbBinding.run(sql`
+                    SELECT u.id, u.name, u.email, u.email_verified, u.created_at, 
+                           s.id as session_id, s.token, s.ip_address, s.user_agent, s.city, s.country
+                    FROM users u 
+                    LEFT JOIN sessions s ON u.id = s.user_id 
+                    ORDER BY u.created_at DESC 
+                    LIMIT 200
+                `)
+            );
 
-        await this.measureTime("insert_single_user", "binding", () =>
-            this.dbBinding.run(sql`
-                INSERT INTO users (id, name, email, email_verified, created_at, updated_at, is_anonymous) 
-                VALUES (${userId1}, 'Benchmark User', ${"bench_" + timestamp + "@test.com"}, 1, ${timestamp}, ${timestamp}, 0)
-            `)
-        );
-
-        await this.measureTime("insert_single_user", "http", () =>
-            this.dbHttp.run(sqlHttp`
-                INSERT INTO users (id, name, email, email_verified, created_at, updated_at, is_anonymous) 
-                VALUES (${userId2}, 'Benchmark User HTTP', ${"bench_http_" + timestamp + "@test.com"}, 1, ${timestamp}, ${timestamp}, 0)
-            `)
-        );
-
-        // Batch INSERT (using multiple single inserts for simplicity)
-        const batchTimestamp = Date.now();
-        await this.measureTime("insert_batch_10_users", "binding", async () => {
-            for (let i = 0; i < 10; i++) {
-                await this.dbBinding.run(sql`
-                    INSERT INTO users (id, name, email, email_verified, created_at, updated_at, is_anonymous) 
-                    VALUES (${"batch_user_" + batchTimestamp + "_" + i}, ${"Batch User " + i}, ${"batch_" + batchTimestamp + "_" + i + "@test.com"}, ${i % 2}, ${batchTimestamp}, ${batchTimestamp}, 0)
-                `);
-            }
-        });
-
-        await this.measureTime("insert_batch_10_users", "http", async () => {
-            for (let i = 0; i < 10; i++) {
-                await this.dbHttp.run(sqlHttp`
-                    INSERT INTO users (id, name, email, email_verified, created_at, updated_at, is_anonymous) 
-                    VALUES (${"batch_user_http_" + batchTimestamp + "_" + i}, ${"Batch User HTTP " + i}, ${"batch_http_" + batchTimestamp + "_" + i + "@test.com"}, ${i % 2}, ${batchTimestamp}, ${batchTimestamp}, 0)
-                `);
-            }
-        });
-
-        // UPDATE operations
-        await this.measureTime("update_user_name", "binding", () =>
-            this.dbBinding.run(sql`
-                UPDATE users 
-                SET name = 'Updated Name', updated_at = ${Date.now()}
-                WHERE id = ${userId1}
-            `)
-        );
-
-        await this.measureTime("update_user_name", "http", () =>
-            this.dbHttp.run(sqlHttp`
-                UPDATE users 
-                SET name = 'Updated Name HTTP', updated_at = ${Date.now()}
-                WHERE id = ${userId2}
-            `)
-        );
+            await this.measureTime(
+                `bulk_select_${i}`,
+                "Bulk SELECT",
+                "Retrieve large dataset with JOIN - getting chunks of data efficiently",
+                bulkSelectQuery,
+                "http",
+                () =>
+                    this.dbHttp.run(sqlHttp`
+                    SELECT u.id, u.name, u.email, u.email_verified, u.created_at, 
+                           s.id as session_id, s.token, s.ip_address, s.user_agent, s.city, s.country
+                    FROM users u 
+                    LEFT JOIN sessions s ON u.id = s.user_id 
+                    ORDER BY u.created_at DESC 
+                    LIMIT 200
+                `)
+            );
+        }
     }
 
     async runWarmup(): Promise<void> {
@@ -304,120 +427,6 @@ export class D1BenchmarkSimple {
         }
 
         console.log("Warmup completed");
-    }
-
-    async runConcurrentTest(concurrency: number = 5, iterations: number = 20): Promise<void> {
-        console.log(`Running concurrent test: ${concurrency} concurrent requests, ${iterations} iterations each`);
-
-        const bindingOp = () => this.dbBinding.run(sql`SELECT COUNT(*) FROM users WHERE email_verified = 1`);
-        const httpOp = () => this.dbHttp.run(sqlHttp`SELECT COUNT(*) FROM users WHERE email_verified = 1`);
-
-        // Test binding concurrency
-        console.log("Testing binding concurrency...");
-        const bindingPromises: Promise<void>[] = [];
-        for (let c = 0; c < concurrency; c++) {
-            bindingPromises.push(
-                (async () => {
-                    for (let i = 0; i < iterations; i++) {
-                        await this.measureTime(`concurrent_binding_${c}_${i}`, "binding", bindingOp);
-                    }
-                })()
-            );
-        }
-        await Promise.all(bindingPromises);
-
-        // Test HTTP concurrency
-        console.log("Testing HTTP concurrency...");
-        const httpPromises: Promise<void>[] = [];
-        for (let c = 0; c < concurrency; c++) {
-            httpPromises.push(
-                (async () => {
-                    for (let i = 0; i < iterations; i++) {
-                        await this.measureTime(`concurrent_http_${c}_${i}`, "http", httpOp);
-                    }
-                })()
-            );
-        }
-        await Promise.all(httpPromises);
-    }
-
-    async runLoadTest(iterations: number = 50): Promise<void> {
-        console.log(`Running sequential load test with ${iterations} iterations per approach...`);
-
-        // Define realistic operations for load testing
-        const operations = [
-            {
-                name: "simple_select",
-                binding: () => this.dbBinding.run(sql`SELECT * FROM users LIMIT 10`),
-                http: () => this.dbHttp.run(sqlHttp`SELECT * FROM users LIMIT 10`),
-            },
-            {
-                name: "count_query",
-                binding: () => this.dbBinding.run(sql`SELECT COUNT(*) FROM sessions`),
-                http: () => this.dbHttp.run(sqlHttp`SELECT COUNT(*) FROM sessions`),
-            },
-            {
-                name: "filtered_select",
-                binding: () => this.dbBinding.run(sql`SELECT * FROM users WHERE email_verified = 1 LIMIT 10`),
-                http: () => this.dbHttp.run(sqlHttp`SELECT * FROM users WHERE email_verified = 1 LIMIT 10`),
-            },
-            {
-                name: "join_query",
-                binding: () =>
-                    this.dbBinding.run(
-                        sql`SELECT u.name, s.created_at FROM users u JOIN sessions s ON u.id = s.user_id LIMIT 5`
-                    ),
-                http: () =>
-                    this.dbHttp.run(
-                        sqlHttp`SELECT u.name, s.created_at FROM users u JOIN sessions s ON u.id = s.user_id LIMIT 5`
-                    ),
-            },
-        ];
-
-        // Test each operation type multiple times
-        for (const op of operations) {
-            for (let i = 0; i < Math.floor(iterations / operations.length); i++) {
-                await this.measureTime(`${op.name}_binding_${i}`, "binding", op.binding);
-                await this.measureTime(`${op.name}_http_${i}`, "http", op.http);
-            }
-        }
-    }
-
-    async runRawSqlTest(): Promise<void> {
-        console.log("Running raw SQL benchmarks...");
-
-        // Raw SQL queries
-        await this.measureTime("raw_sql_count", "binding", () =>
-            this.dbBinding.run(sql`SELECT COUNT(*) as count FROM users WHERE email_verified = 1`)
-        );
-
-        await this.measureTime("raw_sql_count", "http", () =>
-            this.dbHttp.run(sqlHttp`SELECT COUNT(*) as count FROM users WHERE email_verified = 1`)
-        );
-
-        await this.measureTime("raw_sql_complex", "binding", () =>
-            this.dbBinding.run(sql`
-                SELECT u.name, COUNT(s.id) as session_count 
-                FROM users u 
-                LEFT JOIN sessions s ON u.id = s.user_id 
-                GROUP BY u.id, u.name 
-                HAVING session_count > 0 
-                ORDER BY session_count DESC 
-                LIMIT 20
-            `)
-        );
-
-        await this.measureTime("raw_sql_complex", "http", () =>
-            this.dbHttp.run(sqlHttp`
-                SELECT u.name, COUNT(s.id) as session_count 
-                FROM users u 
-                LEFT JOIN sessions s ON u.id = s.user_id 
-                GROUP BY u.id, u.name 
-                HAVING session_count > 0 
-                ORDER BY session_count DESC 
-                LIMIT 20
-            `)
-        );
     }
 
     private calculateStats(durations: number[]): Omit<BenchmarkStats, "totalOperations" | "successRate"> {
@@ -450,7 +459,9 @@ export class D1BenchmarkSimple {
         };
     }
 
-    generateReport(): BenchmarkSummary {
+    generateReport(): BenchmarkSummary & {
+        queryTypeResults: Record<string, { binding: BenchmarkStats; http: BenchmarkStats; speedup: number }>;
+    } {
         const bindingResults = this.results.filter(r => r.approach === "binding" && r.success);
         const httpResults = this.results.filter(r => r.approach === "http" && r.success);
 
@@ -470,8 +481,45 @@ export class D1BenchmarkSimple {
                 ? httpResults.length / this.results.filter(r => r.approach === "http").length
                 : 0;
 
+        // Generate per-query-type statistics
+        const queryTypes = [...new Set(this.results.map(r => r.queryType))];
+        const queryTypeResults: Record<string, { binding: BenchmarkStats; http: BenchmarkStats; speedup: number }> = {};
+
+        for (const queryType of queryTypes) {
+            const bindingForType = this.results.filter(
+                r => r.queryType === queryType && r.approach === "binding" && r.success
+            );
+            const httpForType = this.results.filter(
+                r => r.queryType === queryType && r.approach === "http" && r.success
+            );
+
+            if (bindingForType.length > 0 && httpForType.length > 0) {
+                const bindingStatsForType = this.calculateStats(bindingForType.map(r => r.duration));
+                const httpStatsForType = this.calculateStats(httpForType.map(r => r.duration));
+
+                queryTypeResults[queryType] = {
+                    binding: {
+                        ...bindingStatsForType,
+                        totalOperations: bindingForType.length,
+                        successRate:
+                            bindingForType.length /
+                            this.results.filter(r => r.queryType === queryType && r.approach === "binding").length,
+                    },
+                    http: {
+                        ...httpStatsForType,
+                        totalOperations: httpForType.length,
+                        successRate:
+                            httpForType.length /
+                            this.results.filter(r => r.queryType === queryType && r.approach === "http").length,
+                    },
+                    speedup: httpStatsForType.avg > 0 ? httpStatsForType.avg / bindingStatsForType.avg : 0,
+                };
+            }
+        }
+
         return {
             results: this.results,
+            queryTypeResults,
             summary: {
                 binding: {
                     ...bindingStats,
@@ -490,42 +538,26 @@ export class D1BenchmarkSimple {
         };
     }
 
-    async runFullBenchmark(userCount: number = 1000, loadIterations: number = 50): Promise<BenchmarkSummary> {
+    async runFullBenchmark(userCount: number = 1000, queryIterations: number = 15): Promise<BenchmarkSummary> {
         console.log("Starting enhanced D1 binding vs HTTP benchmark...");
 
         // Clear previous results
         this.clearResults();
 
         // Step 1: Warmup
-        console.log("Step 1/7: Warming up connections...");
+        console.log("Step 1/4: Warming up connections...");
         await this.runWarmup();
 
         // Step 2: Seed data
-        console.log("Step 2/7: Seeding test data...");
+        console.log("Step 2/4: Seeding test data...");
         await this.seedData(userCount);
 
-        // Step 3: Basic queries
-        console.log("Step 3/7: Running basic queries...");
-        await this.runBasicQueries();
+        // Step 3: Run focused query benchmarks
+        console.log("Step 3/4: Running focused query benchmarks...");
+        await this.runQueryBenchmarks(queryIterations);
 
-        // Step 4: Write operations
-        console.log("Step 4/7: Running write operations...");
-        await this.runWriteOperations();
-
-        // Step 5: Sequential load testing
-        console.log("Step 5/7: Running sequential load test...");
-        await this.runLoadTest(loadIterations);
-
-        // Step 6: Concurrent testing
-        console.log("Step 6/7: Running concurrent test...");
-        await this.runConcurrentTest(3, 15);
-
-        // Step 7: Raw SQL tests
-        console.log("Step 7/7: Running raw SQL tests...");
-        await this.runRawSqlTest();
-
-        // Final cleanup
-        console.log("Cleaning up...");
+        // Step 4: Cleanup
+        console.log("Step 4/4: Cleaning up...");
         await this.cleanDatabase();
 
         console.log("Benchmark completed!");

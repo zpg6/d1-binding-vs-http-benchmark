@@ -49,7 +49,7 @@ app.get("/health", c => {
 // Benchmark route
 app.post("/benchmark/run", async c => {
     try {
-        const { userCount = 1000, loadIterations = 50 } = await c.req.json().catch(() => ({}));
+        const { userCount = 1000, queryIterations = 50 } = await c.req.json().catch(() => ({}));
 
         const benchmark = new D1BenchmarkSimple({
             accountId: c.env.CLOUDFLARE_ACCOUNT_ID,
@@ -58,7 +58,7 @@ app.post("/benchmark/run", async c => {
             binding: c.env.DATABASE,
         });
 
-        const report = await benchmark.runFullBenchmark(userCount, loadIterations);
+        const report = await benchmark.runFullBenchmark(userCount, queryIterations);
 
         return c.json({
             success: true,
@@ -66,7 +66,7 @@ app.post("/benchmark/run", async c => {
             timestamp: new Date().toISOString(),
             testConfig: {
                 userCount,
-                loadIterations,
+                queryIterations,
             },
         });
     } catch (error) {
@@ -124,18 +124,99 @@ app.get("/benchmark", async c => {
     <div class="card">
         <div class="header">
             <h1 class="title">D1 Binding vs HTTP Benchmark</h1>
-            <p class="subtitle">Performance comparison between Drizzle D1 binding and D1-HTTP driver</p>
+            <p class="subtitle">Compares Drizzle D1 binding vs D1-HTTP driver across 6 query types</p>
         </div>
         
         <div class="controls">
             <label>Users to seed: <input type="number" id="userCount" value="1000" min="100" max="10000"></label>
-            <label>Load iterations: <input type="number" id="loadIterations" value="50" min="10" max="200"></label>
+            <label>Query iterations: <input type="number" id="queryIterations" value="15" min="5" max="50"></label>
             <button onclick="runBenchmark()" class="primary-btn" id="runBtn">Run Benchmark</button>
+        </div>
+        
+        <div class="test-info card" style="background: #f8fafc; margin: 20px 0;">
+            <h3>What This Tests:</h3>
+            <p style="margin: 10px 0;">Runs 6 different SQL query patterns N times each using both D1 binding and HTTP approaches to measure performance differences.</p>
+            
+            <details style="margin-top: 15px;">
+                <summary style="cursor: pointer; font-weight: 600; padding: 5px 0;">📋 View Query Types & SQL</summary>
+                <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 20px;">
+                    
+                    <div style="display: flex; align-items: flex-start; gap: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px;">
+                        <div style="max-width: 300px;">
+                            <strong>1. Simple SELECT</strong>
+                            <p style="font-size: 0.875rem; color: #6b7280; margin: 5px 0 0 0;">Basic data retrieval - fetches a small set of user records with specific columns</p>
+                        </div>
+                        <pre style="background: #f3f4f6; padding: 12px; border-radius: 4px; font-size: 0.8rem; margin: 0; max-width: 600px; overflow-x: auto; border: 1px solid #d1d5db;">SELECT id, name, email FROM users LIMIT 20</pre>
+                    </div>
+
+                    <div style="display: flex; align-items: flex-start; gap: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px;">
+                        <div style="max-width: 300px;">
+                            <strong>2. Filtered SELECT</strong>
+                            <p style="font-size: 0.875rem; color: #6b7280; margin: 5px 0 0 0;">WHERE clause filtering - finds users matching specific conditions (verified and not anonymous)</p>
+                        </div>
+                        <pre style="background: #f3f4f6; padding: 12px; border-radius: 4px; font-size: 0.8rem; margin: 0; max-width: 600px; overflow-x: auto; border: 1px solid #d1d5db;">SELECT * FROM users 
+WHERE email_verified = 1 AND is_anonymous = 0 
+LIMIT 30</pre>
+                    </div>
+
+                    <div style="display: flex; align-items: flex-start; gap: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px;">
+                        <div style="max-width: 300px;">
+                            <strong>3. JOIN Operations</strong>
+                            <p style="font-size: 0.875rem; color: #6b7280; margin: 5px 0 0 0;">Relational data retrieval - combines user and session data with filtering and ordering</p>
+                        </div>
+                        <pre style="background: #f3f4f6; padding: 12px; border-radius: 4px; font-size: 0.8rem; margin: 0; max-width: 600px; overflow-x: auto; border: 1px solid #d1d5db;">SELECT u.name, u.email, s.created_at as last_session, 
+       s.city, s.country
+FROM users u 
+INNER JOIN sessions s ON u.id = s.user_id 
+WHERE s.created_at > [recent_timestamp]
+ORDER BY s.created_at DESC
+LIMIT 25</pre>
+                    </div>
+
+                    <div style="display: flex; align-items: flex-start; gap: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px;">
+                        <div style="max-width: 300px;">
+                            <strong>4. Aggregation</strong>
+                            <p style="font-size: 0.875rem; color: #6b7280; margin: 5px 0 0 0;">COUNT and GROUP BY operations - analytics-style queries with aggregation functions</p>
+                        </div>
+                        <pre style="background: #f3f4f6; padding: 12px; border-radius: 4px; font-size: 0.8rem; margin: 0; max-width: 600px; overflow-x: auto; border: 1px solid #d1d5db;">SELECT u.is_anonymous, COUNT(*) as user_count, 
+       COUNT(s.id) as session_count,
+       AVG(LENGTH(u.name)) as avg_name_length
+FROM users u
+LEFT JOIN sessions s ON u.id = s.user_id
+GROUP BY u.is_anonymous
+ORDER BY user_count DESC</pre>
+                    </div>
+
+                    <div style="display: flex; align-items: flex-start; gap: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px;">
+                        <div style="max-width: 300px;">
+                            <strong>5. Bulk INSERT</strong>
+                            <p style="font-size: 0.875rem; color: #6b7280; margin: 5px 0 0 0;">Writing chunks of data - inserts multiple user records in a single query for efficiency</p>
+                        </div>
+                        <pre style="background: #f3f4f6; padding: 12px; border-radius: 4px; font-size: 0.8rem; margin: 0; max-width: 600px; overflow-x: auto; border: 1px solid #d1d5db;">INSERT INTO users (id, name, email, email_verified, created_at, updated_at, is_anonymous) VALUES 
+(?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?), 
+(?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?)</pre>
+                    </div>
+
+                    <div style="display: flex; align-items: flex-start; gap: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px;">
+                        <div style="max-width: 300px;">
+                            <strong>6. Bulk SELECT</strong>
+                            <p style="font-size: 0.875rem; color: #6b7280; margin: 5px 0 0 0;">Reading chunks of data - retrieves large dataset with JOIN for bulk data operations</p>
+                        </div>
+                        <pre style="background: #f3f4f6; padding: 12px; border-radius: 4px; font-size: 0.8rem; margin: 0; max-width: 600px; overflow-x: auto; border: 1px solid #d1d5db;">SELECT u.id, u.name, u.email, u.email_verified, u.created_at, 
+       s.id as session_id, s.token, s.ip_address, s.user_agent, s.city, s.country
+FROM users u 
+LEFT JOIN sessions s ON u.id = s.user_id 
+ORDER BY u.created_at DESC 
+LIMIT 200</pre>
+                    </div>
+
+                </div>
+            </details>
         </div>
         
         <div id="status" class="loading" style="display:none;">
             <div id="progress">Running benchmark...</div>
-            <div class="duration-note">This may take up to 30 seconds. Please don't leave the page.</div>
+            <div class="duration-note">This may take up to 5min for 200 iterations. Please don't leave the page.</div>
         </div>
         
         <div id="results" class="results" style="display:none;">
@@ -159,7 +240,7 @@ app.get("/benchmark", async c => {
     <script>
         async function runBenchmark() {
             const userCount = parseInt(document.getElementById('userCount').value);
-            const loadIterations = parseInt(document.getElementById('loadIterations').value);
+            const queryIterations = parseInt(document.getElementById('queryIterations').value);
             const runBtn = document.getElementById('runBtn');
             
             // Disable button and show status
@@ -171,7 +252,7 @@ app.get("/benchmark", async c => {
                 const response = await fetch('/benchmark/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userCount, loadIterations })
+                    body: JSON.stringify({ userCount, queryIterations })
                 });
                 
                 const result = await response.json();
@@ -203,69 +284,121 @@ app.get("/benchmark", async c => {
         }
 
         function displayResults(report) {
-            const { results, summary } = report;
+            const { results, summary, queryTypeResults } = report;
             
-            // Display summary
+            // Display overall summary
             const summaryDiv = document.getElementById('summary');
             summaryDiv.innerHTML = \`
                 <div class="metric binding">
                     <div class="metric-value">\${summary.binding.avg.toFixed(1)}ms</div>
-                    <div class="metric-label">Binding Avg</div>
+                    <div class="metric-label">Overall Binding Avg</div>
                 </div>
                 <div class="metric http">
                     <div class="metric-value">\${summary.http.avg.toFixed(1)}ms</div>
-                    <div class="metric-label">HTTP Avg</div>
+                    <div class="metric-label">Overall HTTP Avg</div>
                 </div>
                 <div class="metric binding">
-                    <div class="metric-value">\${summary.binding.median.toFixed(1)}ms</div>
-                    <div class="metric-label">Binding Median</div>
+                    <div class="metric-value">\${summary.binding.totalOperations}</div>
+                    <div class="metric-label">Binding Operations</div>
                 </div>
                 <div class="metric http">
-                    <div class="metric-value">\${summary.http.median.toFixed(1)}ms</div>
-                    <div class="metric-label">HTTP Median</div>
-                </div>
-                <div class="metric binding">
-                    <div class="metric-value">\${summary.binding.p95.toFixed(1)}ms</div>
-                    <div class="metric-label">Binding P95</div>
-                </div>
-                <div class="metric http">
-                    <div class="metric-value">\${summary.http.p95.toFixed(1)}ms</div>
-                    <div class="metric-label">HTTP P95</div>
+                    <div class="metric-value">\${summary.http.totalOperations}</div>
+                    <div class="metric-label">HTTP Operations</div>
                 </div>
             \`;
             
-            // Display speedup factor
+            // Display overall speedup factor
             const speedupDiv = document.getElementById('speedup');
             const avgSpeedup = summary.speedupFactor;
-            const medianSpeedup = summary.medianSpeedup;
-            const p95Speedup = summary.p95Speedup;
-            
             const speedupClass = avgSpeedup > 1 ? 'positive' : 'negative';
             
             speedupDiv.innerHTML = \`
                 <div class="speedup \${speedupClass}">
-                    <strong>Performance Summary:</strong><br/>
-                    Avg: Binding is \${avgSpeedup.toFixed(2)}x faster | 
-                    Median: \${medianSpeedup.toFixed(2)}x faster | 
-                    P95: \${p95Speedup.toFixed(2)}x faster
+                    <strong>Overall Performance:</strong> 
+                    Binding is \${avgSpeedup.toFixed(2)}x \${avgSpeedup > 1 ? 'faster' : 'slower'} than HTTP on average
                 </div>
             \`;
             
-            // Display detailed results
-            const tbody = document.getElementById('resultsBody');
-            tbody.innerHTML = results.map(result => \`
-                <tr>
-                    <td>\${result.operation}</td>
-                    <td><span class="\${result.approach}">\${result.approach}</span></td>
-                    <td>\${result.duration.toFixed(2)}</td>
-                    <td>\${result.recordsAffected || '-'}</td>
-                    <td class="\${result.success ? 'success' : 'error'}">
-                        \${result.success ? '✓' : '✗' + (result.error ? ' ' + result.error : '')}
-                    </td>
-                </tr>
-            \`).join('');
+            // Display query type breakdown
+            const resultsDiv = document.getElementById('results');
+            let queryTypeHtml = '<h3 style="margin-top: 30px;">Results by Query Type:</h3>';
             
-            document.getElementById('results').style.display = 'block';
+            Object.entries(queryTypeResults).forEach(([queryType, stats]) => {
+                const speedup = stats.speedup;
+                const speedupClass = speedup > 1 ? 'positive' : 'negative';
+                const description = results.find(r => r.queryType === queryType)?.description || '';
+                
+                const sqlQuery = results.find(r => r.queryType === queryType)?.sqlQuery || '';
+                
+                queryTypeHtml += \`
+                    <div class="card" style="margin: 15px 0; border-left: 4px solid \${speedup > 1 ? '#10b981' : '#f59e0b'};">
+                        <h4 style="margin: 0 0 10px 0;">\${queryType}</h4>
+                        <p style="font-size: 0.875rem; color: #6b7280; margin: 0 0 15px 0;">\${description}</p>
+                        
+                        <details style="margin: 10px 0;">
+                            <summary style="cursor: pointer; font-size: 0.875rem; color: #3b82f6;">🔍 View SQL Query</summary>
+                            <pre style="background: #f3f4f6; padding: 12px; border-radius: 4px; font-size: 0.8rem; margin-top: 8px; overflow-x: auto; border: 1px solid #e5e7eb;">\${sqlQuery}</pre>
+                        </details>
+                        
+                        <div class="summary" style="margin: 15px 0;">
+                            <div class="metric binding">
+                                <div class="metric-value">\${stats.binding.avg.toFixed(1)}ms</div>
+                                <div class="metric-label">Binding Avg</div>
+                            </div>
+                            <div class="metric http">
+                                <div class="metric-value">\${stats.http.avg.toFixed(1)}ms</div>
+                                <div class="metric-label">HTTP Avg</div>
+                            </div>
+                            <div class="metric binding">
+                                <div class="metric-value">\${stats.binding.median.toFixed(1)}ms</div>
+                                <div class="metric-label">Binding Median</div>
+                            </div>
+                            <div class="metric http">
+                                <div class="metric-value">\${stats.http.median.toFixed(1)}ms</div>
+                                <div class="metric-label">HTTP Median</div>
+                            </div>
+                        </div>
+                        
+                        <div class="speedup \${speedupClass}" style="margin: 10px 0;">
+                            Binding is <strong>\${speedup.toFixed(2)}x \${speedup > 1 ? 'faster' : 'slower'}</strong> for this query type
+                        </div>
+                    </div>
+                \`;
+            });
+            
+            // Display detailed results table
+            queryTypeHtml += \`
+                <details style="margin-top: 30px;">
+                    <summary style="cursor: pointer; font-weight: 600; padding: 5px 0;">📊 View Detailed Results</summary>
+                    <table class="results-table" style="margin-top: 15px;">
+                        <thead>
+                            <tr>
+                                <th>Query Type</th>
+                                <th>Approach</th>
+                                <th>Duration (ms)</th>
+                                <th>Records</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            \${results.map(result => \`
+                                <tr>
+                                    <td>\${result.queryType}</td>
+                                    <td><span class="\${result.approach}">\${result.approach}</span></td>
+                                    <td>\${result.duration.toFixed(2)}</td>
+                                    <td>\${result.recordsAffected || '-'}</td>
+                                    <td class="\${result.success ? 'success' : 'error'}">
+                                        \${result.success ? '✓' : '✗' + (result.error ? ' ' + result.error : '')}
+                                    </td>
+                                </tr>
+                            \`).join('')}
+                        </tbody>
+                    </table>
+                </details>
+            \`;
+            
+            resultsDiv.innerHTML = summaryDiv.outerHTML + speedupDiv.outerHTML + queryTypeHtml;
+            resultsDiv.style.display = 'block';
         }
     </script>
 </body>
