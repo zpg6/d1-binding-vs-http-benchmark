@@ -1,0 +1,32 @@
+# For more details on how to configure Wrangler, refer to:
+# https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "d1-binding-vs-http-benchmark"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[placement]
+mode = "smart"
+
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "d1-binding-vs-http-benchmark-db"
+database_id = "your-database-id-here"
+migrations_dir = "drizzle"
+
+[vars]
+CLOUDFLARE_ACCOUNT_ID = "your-account-id-here"
+CLOUDFLARE_DATABASE_ID = "your-database-id-here"
+CLOUDFLARE_API_TOKEN = "your-api-token-here"
+
+
+# To protect the database id, we ignore this
+# file when committing to the repo by running once:
+# git update-index --assume-unchanged wrangler.toml
+#
+# Put back in git if you need to commit this file:
+# git update-index --no-assume-unchanged wrangler.toml
