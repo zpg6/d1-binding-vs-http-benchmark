@@ -5,7 +5,8 @@
 
 A comprehensive performance benchmark comparing Cloudflare D1 database access via **direct binding** vs **HTTP API** from _within_ Cloudflare Workers. This tool helps quantify the performance benefits of using D1 bindings versus making HTTP requests to the D1 API from within the Cloudflare datacenter.
 
-> [!IMPORTANT] > **Context**: The HTTP driver allows you to use Drizzle ORM with D1 outside of Cloudflare Workers (e.g., from CI/CD, other serverless platforms, or local scripts). This benchmark specifically focuses on the **latency differences within Cloudflare Workers** between using the HTTP driver versus direct bindings. This is particularly relevant for **multitenancy scenarios** where a single worker may need to access multiple D1 databases that aren't bound to the worker, requiring the HTTP driver even within the Cloudflare environment.
+> [!IMPORTANT]
+> The HTTP driver allows you to use Drizzle ORM with D1 outside of Cloudflare Workers (e.g., from CI/CD, other serverless platforms, or local scripts). This benchmark specifically focuses on the **latency differences within Cloudflare Workers** between using the HTTP driver versus direct bindings. This is particularly relevant for **multitenancy scenarios** where a single worker may need to access multiple D1 databases that aren't bound to the worker, requiring the HTTP driver even within the Cloudflare environment.
 
 _Powered by [better-auth-cloudflare](https://github.com/zpg6/better-auth-cloudflare)_
 
@@ -59,14 +60,14 @@ CLOUDFLARE_API_TOKEN = "your-api-token"     # Replace with your API token with D
 
 ### Getting Your Values
 
--   **Account ID**: Found in Cloudflare dashboard sidebar
--   **Database ID**: From `wrangler d1 create` command output or in dashboard
+-   **Account ID**: Found in Cloudflare dashboard in your main account page
+-   **Database ID**: From `wrangler d1 create` command output or after creating a database in the dashboard
 -   **API Token**: Create at [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) with D1:Edit permissions
 
 ## Available Scripts
 
 -   `pnpm run deploy` - Deploy to Cloudflare Workers
--   `pnpm run db:migrate:prod` - Apply database migrations
+-   `pnpm run db:migrate:prod` - Apply database migrations if you need to update the schema
 
 ## License
 
