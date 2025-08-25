@@ -5,6 +5,8 @@
 
 A comprehensive performance benchmark comparing Cloudflare D1 database access via **direct binding** vs **HTTP API** from _within_ Cloudflare Workers. This tool helps quantify the performance benefits of using D1 bindings versus making HTTP requests to the D1 API from within the Cloudflare datacenter.
 
+> [!IMPORTANT] > **Context**: The HTTP driver allows you to use Drizzle ORM with D1 outside of Cloudflare Workers (e.g., from CI/CD, other serverless platforms, or local scripts). This benchmark specifically focuses on the **latency differences within Cloudflare Workers** between using the HTTP driver versus direct bindings. This is particularly relevant for **multitenancy scenarios** where a single worker may need to access multiple D1 databases that aren't bound to the worker, requiring the HTTP driver even within the Cloudflare environment.
+
 _Powered by [better-auth-cloudflare](https://github.com/zpg6/better-auth-cloudflare)_
 
 ## See the Results
