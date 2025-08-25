@@ -5,6 +5,8 @@
 
 A comprehensive performance benchmark comparing Cloudflare D1 database access via **direct binding** vs **HTTP API** from _within_ Cloudflare Workers. This tool helps quantify the performance benefits of using D1 bindings versus making HTTP requests to the D1 API from within the Cloudflare datacenter.
 
+_Powered by [better-auth-cloudflare](https://github.com/zpg6/better-auth-cloudflare)_
+
 ## See the Results
 
 ![One time results](./screenshot.png)
@@ -55,15 +57,19 @@ CLOUDFLARE_API_TOKEN = "your-api-token"     # Replace with your API token with D
 
 ### Getting Your Values
 
-- **Account ID**: Found in Cloudflare dashboard sidebar
-- **Database ID**: From `wrangler d1 create` command output or in dashboard
-- **API Token**: Create at [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) with D1:Edit permissions
+-   **Account ID**: Found in Cloudflare dashboard sidebar
+-   **Database ID**: From `wrangler d1 create` command output or in dashboard
+-   **API Token**: Create at [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) with D1:Edit permissions
 
 ## Available Scripts
 
-- `pnpm run deploy` - Deploy to Cloudflare Workers
-- `pnpm run db:migrate:prod` - Apply database migrations
+-   `pnpm run deploy` - Deploy to Cloudflare Workers
+-   `pnpm run db:migrate:prod` - Apply database migrations
 
----
+## License
 
-_Powered by [better-auth-cloudflare](https://github.com/zpg6/better-auth-cloudflare)_
+[MIT](./LICENSE)
+
+## Contributing
+
+Contributions are welcome! Whether it's bug fixes, feature additions, or documentation improvements, we appreciate your help in making this project better. For major changes or new features, please open an issue first to discuss what you would like to change.

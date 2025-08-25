@@ -1,5 +1,24 @@
 {
     "name": "d1-binding-vs-http-benchmark",
+    "version": "1.0.0",
+    "description": "Benchmarking D1 Bound Drizzle vs D1 HTTP Drizzle (contributed by me) from within a Cloudflare Worker to understand the real-world latency differences for a few different types of queries.",
+    "author": "Zach Grimaldi",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/zpg6/d1-binding-vs-http-benchmark.git"
+    },
+    "keywords": [
+        "cloudflare",
+        "d1",
+        "benchmark",
+        "performance",
+        "workers",
+        "better-auth",
+        "drizzle",
+        "database",
+        "http",
+        "binding"
+    ],
     "scripts": {
         "dev": "wrangler dev",
         "build": "npx tsc --noEmit",
